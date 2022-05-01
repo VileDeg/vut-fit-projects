@@ -1,3 +1,0 @@
-ITY Acad. year 2021/2022 Summer semester 4 credits
-
-Students learn the basics of typography and tools for creating documents. We concentrate on the LaTeX system for preparing professional documents and publications. The course consists of six lectures (one 100 minutes long lecture per two weeks). Students practise their knowledge within five LaTeX projects. The final test is at the end of teaching part of the term.

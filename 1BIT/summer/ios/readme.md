@@ -1,3 +1,0 @@
-IOS Acad. year 2021/2022 Summer semester 5 credits
-
-The concept of an operating system (OS) as a part of software of a computer system. Architectures of operating systems, a classification of operating systems. An overview of the contemporary operating systems. The kernel of UNIX, its structure, graphical and textual interfaces, command languages. Process management, context switching, scheduling, interprocess communication. Memory management, paging, virtual memory. Synchronization of processes, semaphores and other synchronization means, deadlock, starvation.

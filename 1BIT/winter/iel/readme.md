@@ -1,3 +1,0 @@
-IEL Acad. year 2021/2022 Winter semester 6 credits
-
-Basic transient analysis of electric circuits. Formulation of circuit equations and possibilities of their solutions. Analysis of RC, RL, and RLC circuits. Analysis of non-linear electric circuits. Parameters and characteristics of semiconductor elements. Graphic, numerical, and analytical methods of non-linear circuit analysis. TTL and CMOS gates. Power supply units. Limiters and sampling circuits. Level translators, stabilizers. Astable, monostable, and bistable flip-flops. Lossless and lossy transmission lines. Wave propagation on transmission lines, reflections, impedance matching.
