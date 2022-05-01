@@ -1,0 +1,360 @@
+#!/bin/bash
+
+export POSIXLY_CORRECT=yes
+export LC_ALL=C
+
+print_help() {
+	echo "JMÉNO:"
+	printf "\tcorona — analyzátor záznamů osob s prokázanou nákazou koronavirem způsobujícím onemocnění COVID-19\n"
+    echo "POUŽITÍ:"
+	printf "\tcorona [-h] [FILTERS] [COMMAND] [LOG [LOG2 [...]]\n"
+	echo "VOLBY:"
+	printf "\tCOMMAND může být jeden z:
+		infected    — počet nakažených.
+		merge       — sloučí několik souborů se záznamy do jednoho. Původní pořadí.
+		gender      — počet pro jednotlivá pohlaví.
+		age         — statistika počtu nakažených osob dle věku.
+		daily       — statistika pro jednotlivé dny.
+		monthly     — statistika pro jednotlivé měsíce.
+		yearly      — statistika pro jednotlivé roky.
+		countries   — statistika pro jednotlivé země nákazy.
+		districts   — statistika pro jednotlivé okresy.
+		regions     — statistika pro jednotlivé kraje.\n\n"
+	printf "\tFILTERS může být kombinace následujících (každý maximálně jednou):
+		-a DATETIME — after: pouze záznamy >= DATETIME(YYYY-MM-DD).
+		-b DATETIME — before: pouze záznamy <= DATETIME(YYYY-MM-DD).
+		-g GENDER   — pouze záznamy osob daného pohlaví. GENDER[M,Z].
+		-s [WIDTH]  — data graficky v podobě histogramů. WIDTH(>0) = šířka histogramů.\n\n"
+	printf "\t-h — nápověda s krátkým popisem každého příkazu a přepínače.\n"
+}
+
+DATE_AFTER="0000-01-01"
+DATE_BEFORE="9999-12-31"
+GENDER="NONE"
+WIDTH="NONE"
+
+GOT_FILES="FALSE"
+
+COMMAND="merge"
+cmd_found=0
+INPUT=""
+
+date_validation()
+{
+	echo "$1" | awk -F , -v date="$1" '{
+		
+		if (date ~ /^[0-9]{4}-[01][0-9]-[0-3][0-9]$/)
+		{	
+			yr = substr(date,1,4) + 0
+			mnt = substr(date,6,2)
+			day = substr(date,9,2) + 0
+			if ( day < 1 || day > 31 || mnt < "01" || mnt > "12" || (mnt !~ /01|03|05|07|08|10|12/ && day > 30))
+			{
+				print "invalid";
+				next;
+			}
+
+			if (mnt == "02")
+			{
+				if (day > 29)
+				{
+					print "invalid";
+					next;
+				}
+				if (day < 29)
+				{
+					print "ok";
+					next;
+				}
+				if ( ((yr % 4 == 0) && (yr % 100 != 0)) || (yr % 400 == 0) )
+    			{
+					print "ok";
+					next;
+				}
+				print "invalid";
+				next;
+			}
+			print "ok"
+		}
+		else
+		{
+			print "invalid";
+		}
+	}'
+}
+
+FILES=""
+FILESGZ=""
+FILESBZ2=""
+
+while (( "$#" )); do
+  case "$1" in
+    -h)
+		print_help
+		exit 1
+	;;
+    -a|-b|-g)
+		if [ -n "$2" ] && [ "${2:0:1}" != "-" ]; then
+			case "$1" in
+				-a) DATE_AFTER=$2 ;;
+				-b) DATE_BEFORE=$2;;
+				-g) GENDER=$2     ;;
+			esac
+			shift 2
+		else
+			echo "Error: Argument for $1 is missing" >&2
+			exit 1
+		fi
+    ;;
+	-s) if [ -n "$2" ] && [ "${2:0:1}" != "-" ]; then
+			if [ "$2" -eq "$2" ] 2> /dev/null && (( $2 > 0 )); then #test if width is a positive integer
+				WIDTH=$2
+			else
+				echo "Error: '-s' argument must be a positive integer." >&2
+				exit 1
+			fi
+			shift 2
+		else
+			WIDTH="UNSPEC"
+			shift 1
+		fi
+	;;
+	*.csv|*.gz|*.bz2)
+		GOT_FILES="TRUE"
+		case "$1" in
+			*.csv)
+				[[ -z $FILES ]] && FILES=$1 || FILES+=" $1"
+				#ct=$(cat "$1")
+				#[[ -z $INPUT ]] && INPUT+=$ct || INPUT+=$'\n'$ct
+			;;
+			*.gz)
+				[[ -z $FILESGZ ]] && FILESGZ=$1 || FILESGZ+=" $1"
+				# ct=$(gzip -d -c "$1")
+				# [[ -z $INPUT ]] && INPUT+=$ct || INPUT+=$'\n'$ct
+			;;
+			*.bz2)
+				[[ -z $FILESBZ2 ]] && FILESBZ2=$1 || FILESBZ2+=" $1"
+				# ct=$(bzip2 -d -c "$1")
+				# [[ -z $INPUT ]] && INPUT+=$ct || INPUT+=$'\n'$ct
+			;;
+		esac
+		shift
+	;;
+	infected|merge|gender|age|daily|monthly|yearly|countries|districts|regions)
+		if [ $cmd_found -eq 1 ]; then
+			echo "Error: only one command is allowed." >&2
+			exit 1
+		fi
+		cmd_found=1
+		COMMAND="$1"
+		shift
+	;;
+    -*)
+		echo "Error: Unsupported flag $1" >&2
+		exit 1
+	;;
+    *)
+		echo "Error: Unsupported positional argument $1" >&2
+		exit 1
+    ;;
+  esac
+done
+
+if [[ $GOT_FILES == "FALSE" ]]; then
+	INPUT=$(cat)
+else
+	[[ -n $FILES ]] && INPUT="{ cat $FILES"
+
+	if [[ -n $FILESGZ ]]; then
+		[[ -n $INPUT ]] && INPUT="$INPUT ; gzip -d -c $FILESGZ" || INPUT="{ gzip -d -c $FILESGZ"
+	fi
+
+	if [[ -n $FILESBZ2 ]]; then
+		[[ -n $INPUT ]] && INPUT="$INPUT ; bzip2 -d -c $FILESBZ2" || INPUT="{ bzip2 -d -c $FILESBZ2" 
+	fi
+
+	INPUT+="; }"
+fi
+
+if [[ $(date_validation "$DATE_BEFORE") == "invalid" ]]; then
+	echo "Invalid date after '-b'." > /dev/stderr
+	exit 1
+fi
+if [[ $(date_validation "$DATE_AFTER") == "invalid" ]]; then
+	echo "Invalid date after '-a'." > /dev/stderr
+	exit 1
+fi
+
+INPUT_FILTERED="$INPUT | awk -F , -v curr_date=$(date +%Y-%m-%d) -v d_after=$DATE_AFTER -v d_before=$DATE_BEFORE -v gender=$GENDER '\$2 != \"datum\"{
+	if (\$2 !~ /^[0-9]{4}-[01][0-9]-[0-3][0-9]$|^$/)
+	{
+		printf(\"Invalid date: %s\n\", \$0) > \"/dev/stderr\";
+	}
+	else if (\$3 !~ /^[0-9]{1,3}$|^$/)
+	{
+		printf(\"Invalid age: %s\n\", \$0) > \"/dev/stderr\";
+	}
+	else
+	{	
+		yr = substr(\$2,1,4);
+		mnt = substr(\$2,6,2);
+		day = substr(\$2,9,2);
+
+		if ( \$2 > curr_date || day < \"01\" || dat > \"31\" || mnt < \"01\" || mnt > \"12\" || (mnt !~ /01|03|05|07|08|10|12/ && day > \"30\") ||
+			(mnt ~ /01|03|05|07|08|10|12/ && day > \"31\") || (mnt == \"02\" && day > \"29\"))
+		{
+			printf(\"Invalid date: %s\n\", \$0) > \"/dev/stderr\";
+			next;
+		}
+		
+		if (mnt == \"02\")
+		{
+			if (day > \"29\")
+			{
+				printf(\"Invalid date: %s\n\", \$0) > \"/dev/stderr\";
+				next;
+			}
+			if (   day == \"29\" && !( ((yr % 4 == 0) && (yr % 100 != 0)) || (yr % 400 == 0) )    )
+			{
+				printf(\"Invalid date: %s\n\", \$0) > \"/dev/stderr\";
+				next;
+			}
+		}
+
+		if (\$2 >= d_after && \$2 <= d_before && (gender == \"NONE\" || \$4 == gender))
+		{
+			print \$0
+		}
+	}
+}
+'"
+
+awk_none_reprint()
+{
+	cat | awk -F ":" '{if ($1 !~ /None/){print $0} else {nn_cnt=$2}  }; END{if (nn_cnt != 0){printf("None: %d\n", nn_cnt)}}'
+}
+
+awk_width_print()
+{
+	in=$(cat)
+	if [[ "$WIDTH" == "NONE" ]]; then
+		echo "$in"
+		return
+	elif [[ "$WIDTH" == "UNSPEC" ]]; then
+		wdt=$1
+	else
+		max_cnt=$(echo "$in" | awk -F ":" ' { if ($2 > max_cnt){max_cnt = $2} }; END {print substr(max_cnt,2)}')
+		
+		wdt=$(echo "$max_cnt / $WIDTH" | bc -l)
+	fi
+	echo "$in" | awk -F ":" -v width="$wdt" '{
+		{
+			printf("%s: ", $1);
+			for (i=0; i < int($2/width); i++)
+				{printf("#");}
+			printf("\n");
+		}
+	}'
+}
+
+case "$COMMAND" in
+	infected)
+		eval "$INPUT_FILTERED" | wc -l
+	;;
+	merge)
+		echo "id,datum,vek,pohlavi,kraj_nuts_kod,okres_lau_kod,nakaza_v_zahranici,nakaza_zeme_csu_kod,reportovano_khs"
+		eval "$INPUT_FILTERED"
+	;;
+	gender)
+		out="$INPUT_FILTERED | awk -F , '\$4 ~ /[MZ]|^$/{if (\$4 == \"\"){gen[2]++;} else {if (\$4 == \"M\")gen[0]++; else gen[1]++;}}
+		END{ printf(\"M: %d\n\", gen[0]); printf(\"Z: %d\n\", gen[1]); if (gen[2]!=0)printf(\"None: %d\n\", gen[2]); }'"
+
+		eval "$out" | awk_none_reprint | awk_width_print 100000
+	;;
+	age)
+		out="$INPUT_FILTERED | awk -F , '
+			\$3 ~ /[0-9]{1,3}|^\$/ {		
+				if (\$3 == \"\") {ages[\"None\"]++}
+				else {
+					str=\"0\"
+					if (\$3 <= 5)
+						str = \"0-5\"
+					else if (\$3 <= 15)
+						str = \"6-15\"
+					else if (\$3 <= 25)
+						str = \"16-25\"
+					else if (\$3 <= 35)
+						str = \"26-35\"
+					else if (\$3 <= 45)
+						str = \"36-45\"
+					else if (\$3 <= 55)
+						str = \"46-55\"
+					else if (\$3 <= 65)
+						str = \"56-65\"
+					else if (\$3 <= 75)
+						str = \"66-75\"
+					else if (\$3 <= 85)
+						str = \"76-85\"
+					else if (\$3 <= 95)
+						str = \"86-95\"
+					else if (\$3 <= 105)
+						str = \"96-105\"
+					else
+						str = \">105\"
+					ages[str]++
+				}
+			} END{		
+				printf(\"%-6s: %d\n\", \"0-5\",    ages[\"0-5\"]);
+				printf(\"%-6s: %d\n\", \"6-15\",   ages[\"6-15\"]);
+				printf(\"%-6s: %d\n\", \"16-25\",  ages[\"16-25\"]);
+				printf(\"%-6s: %d\n\", \"26-35\",  ages[\"26-35\"]);
+				printf(\"%-6s: %d\n\", \"36-45\",  ages[\"36-45\"]);
+				printf(\"%-6s: %d\n\", \"46-55\",  ages[\"46-55\"]);
+				printf(\"%-6s: %d\n\", \"56-65\",  ages[\"56-65\"]);
+				printf(\"%-6s: %d\n\", \"66-75\",  ages[\"66-75\"]);
+				printf(\"%-6s: %d\n\", \"76-85\",  ages[\"76-85\"]);
+				printf(\"%-6s: %d\n\", \"86-95\",  ages[\"86-95\"]);
+				printf(\"%-6s: %d\n\", \"96-105\", ages[\"96-105\"]);
+				printf(\"%-6s: %d\n\", \">105\",   ages[\">105\"]);
+				if (ages[\"None\"]!=0) printf(\"%-6s: %d\n\", \"None\",   ages[\"None\"]);
+			}'"
+		
+		eval "$out" | awk_width_print 10000 
+	;;
+	daily)
+		out="$INPUT_FILTERED | awk -F , '\$2 != \"datum\"{if (\$2 == \"\") print \"None\"; else print \$2;}' |
+		sort | uniq -c | awk '{printf(\"%s: %s\n\", \$2, \$1)}'"
+
+		eval "$out" | awk_none_reprint | awk_width_print 500
+	;;
+	monthly)
+		out="$INPUT_FILTERED | awk -F , '\$2 != \"datum\"{if (\$2 != \"\"){print substr(\$2,1,7)} else {print \"None\"}}' |\
+			sort | uniq -c | awk '{printf(\"%s: %s\n\", \$2, \$1)}'"
+
+		eval "$out" | awk_none_reprint | awk_width_print 10000
+	;;
+	yearly)
+		out="$INPUT_FILTERED | awk -F , '\$2 != \"datum\"{if (\$2 != \"\"){print substr(\$2,1,4)} else {print \"None\"}}' |\
+			sort | uniq -c | awk '{printf(\"%s: %s\n\", \$2, \$1)}'"
+
+		eval "$out" | awk_none_reprint | awk_width_print 100000
+	;;
+	countries)
+		out="$INPUT_FILTERED | awk -F , '\$8 ~ /[A-Z]{1,2}|^$/ && \$8 != \"CZ\"{if (\$8 != \"\"){print \$8}}' |\
+			sort | uniq -c | awk '{printf(\"%s: %s\n\", \$2, \$1)}'"
+
+		eval "$out" | awk_none_reprint | awk_width_print 100
+	;;
+	districts)
+		out="$INPUT_FILTERED | awk -F , '\$2 != \"datum\"{if (\$6 != \"\"){print \$6} else {print \"None\"}}' |\
+			sort | uniq -c | awk '{printf(\"%s: %s\n\", \$2, \$1)}'"
+
+		eval "$out" | awk_none_reprint | awk_width_print 100
+	;;
+	regions)
+		out="$INPUT_FILTERED | awk -F , '\$2 != \"datum\"{if (\$5 != \"\"){print \$5} else {print \"None\"}}' |\
+			sort | uniq -c | awk '{printf(\"%s: %s\n\", \$2, \$1)}'"
+		
+		eval "$out" | awk_none_reprint | awk_width_print 100
+	;;
+esac

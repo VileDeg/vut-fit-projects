@@ -1,0 +1,52 @@
+\section{Příklad 5}
+% Jako parametr zadejte skupinu (A-H)
+\patyZadani{C}
+\subsubsection{Vzorec pro napětí na kondenzátoru}
+\begin{align*}
+U_C’ &= \frac{I}{C}
+\end{align*}
+\subsubsection{II Kir. Z. pro obvod}
+\begin{align*}
+U_R + U_C - U &= 0
+\end{align*}
+\subsubsection{Algebraické úpravy}
+\begin{align*}
+U_C’ &= \frac{U_R}{RC}\\
+U_R &= U - U_C\\
+U_C’ &= \frac{U - U_C}{RC}\\
+\boldsymbol{RC}&\times \boldsymbol{U_C’ + U_C = U}\\
+150 &\times  U_C’ + U_C = 45
+\end{align*}
+\subsubsection{Očekávané řešeni}
+\begin{align*}
+\boldsymbol{U_C(t) }&=\boldsymbol{ k(t) \times  e^{\lambda t} }\\
+\end{align*}
+\subsubsection{Najdeme $\lambda$}
+\begin{align*}
+(U_C‘ &= \lambda; U_C = 1)\\
+0 &= 150\times \lambda + 1\\
+\lambda &= - \frac{1}{150}
+\end{align*}
+\subsubsection{Dosadíme $\lambda$ do vzorce a najdeme $k'(t)$}
+\begin{align*}
+U_C(t) &= k(t) \times  e^{-\frac{t}{150} }
+\end{align*}
+\subsubsection{Derivujeme $U_C(t)$ a najdeme $k'(t)$}
+\begin{align*}
+U_C’(t) &= k’(t) \times  e^{-\frac{t}{150} } - \frac {1}{150} \times  k(t) \times  e^{-\frac{t}{150}}\\
+45 &= 150k’(t) \times  e^{-\frac{t}{150}}\\
+k’(t) &= \frac {3}{10} \times  e^{\frac{t}{150}}
+\end{align*}
+\subsubsection{Integrujeme $k'(t)$ a dosadíme do vzorce pro $U_C(t)$}
+\begin{align*}
+k(t) = \int \frac {3}{10} \times  e^{\frac{t}{150}} dt &= \frac{3}{10} \times 150 \times e^{\frac{t}{150}} = 45 \times  e^{\frac{t}{150}} + C\\
+U_C(t) &= (45 \times e^{\frac{t}{150}} + C) \times  e^{-\frac{t}{150}}\\
+\boldsymbol{U_C(t) }&=\boldsymbol{ 45 + C \times  e^{-\frac{t}{150}} }
+\end{align*}
+\subsubsection{Najdeme C}
+\begin{align*}
+U_C(0) &= 45 + C\\
+12 &= 45 + C\\
+C &= -33\\ \\
+\boldsymbol{U_C(t) }&=\boldsymbol{ 45 - 33 \times  e^{-\frac{t}{150}} }
+\end{align*}
